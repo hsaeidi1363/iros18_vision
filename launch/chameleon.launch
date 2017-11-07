@@ -1,0 +1,6 @@
+<launch>
+	<include file = "$(find pointgrey_camera_driver)/launch/camera.launch"/>
+	<node name="camgui" pkg="rqt_gui" type="rqt_gui"/>
+	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker"/>
+</launch>
+
