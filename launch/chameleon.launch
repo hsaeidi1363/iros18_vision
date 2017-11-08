@@ -1,5 +1,12 @@
 <launch>
-	<include file = "$(find pointgrey_camera_driver)/launch/camera.launch"/>
+	<include file = "$(find pointgrey_camera_driver)/launch/camera.launch">
+		<arg name="calibrated" value ="1"/>
+		<arg name="camera_serial" value= "ost"/>
+	</include>
+	<group ns="camera">
+		<node name ="rectifier" pkg = "image_proc" type ="image_proc">
+		</node>
+	</group>	
 	<node name="camgui" pkg="rqt_gui" type="rqt_gui"/>
 	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker"/>
 </launch>
