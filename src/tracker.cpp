@@ -38,7 +38,7 @@ int main(int argc, char * argv[]){
 			cvtColor(img,cimg, CV_RGB2GRAY);
 			GaussianBlur(cimg, cimg, Size(5,5),2,2);
 			vector<Vec3f> circles;
-			HoughCircles(cimg, circles, HOUGH_GRADIENT, 1, cimg.rows/8,255,50,0,0);
+			HoughCircles(cimg, circles, HOUGH_GRADIENT, 1, cimg.rows/8,200,50,0,0);
 			for( size_t i = 0; i < circles.size();i++){
 				Vec3i c = circles[i];
 				circle(img, Point(c[0], c[1]) , c[2], Scalar(0,255,255), 3, LINE_AA);
