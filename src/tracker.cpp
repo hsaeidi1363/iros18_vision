@@ -4,6 +4,7 @@
 #include<sensor_msgs/Image.h>
 #include<cv_bridge/cv_bridge.h>
 #include<geometry_msgs/Twist.h>
+#include "planner.h"
 
 using namespace cv;
 using namespace std;
@@ -43,6 +44,11 @@ int main(int argc, char * argv[]){
 				Vec3i c = circles[i];
 				circle(img, Point(c[0], c[1]) , c[2], Scalar(0,255,255), 3, LINE_AA);
 				circle(img, Point(c[0], c[1]), 2, Scalar(0,255,255), 3, LINE_AA);
+				int n_points = 50;
+				vector< vector<double> > points = get_points(c[0], c[1], c[2], n_points);
+				for (int j = 0; j < n_points; ++j){
+					circle(img, Point(points[j][0], points[j][1]), 5, Scalar(255,0,0), 3, LINE_AA);
+				} 
 			}
 //			cvtColor(cimg,img, CV_GRAY2RGB);//not sure about this
 			cv_ptr->image = img;

@@ -204,5 +204,5 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
-add_executable(iros18_vision_tracker src/tracker.cpp)
+add_executable(iros18_vision_tracker src/tracker.cpp src/planner.cpp)
 target_link_libraries(iros18_vision_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS})
