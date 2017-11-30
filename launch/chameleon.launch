@@ -1,13 +1,17 @@
 <launch>
 	<include file = "$(find pointgrey_camera_driver)/launch/camera.launch">
 		<arg name="calibrated" value ="1"/>
-		<arg name="camera_serial" value= "ost"/>
+		<arg name="camera_serial" value= "rrl"/>
 	</include>
 	<group ns="camera">
 		<node name ="rectifier" pkg = "image_proc" type ="image_proc">
 		</node>
 	</group>	
 	<node name="camgui" pkg="rqt_gui" type="rqt_gui"/>
-	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker"/>
+	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker">
+		<param name = "number_of_waypoints" value = "20"/>
+		<param name ="circle" value = "false"/>
+		<param name ="contour" value = "true"/>
+	</node>
 </launch>
 
