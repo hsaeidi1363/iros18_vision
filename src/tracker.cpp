@@ -60,6 +60,12 @@ void get_img(const sensor_msgs::Image &  _data){
 	initialized = true;
 }
 
+geometry_msgs::Twist rob_pos;
+
+void get_pos (const geometry_msgs::Twist & _data){
+	rob_pos = _data;
+}
+
 // find the distance between to XY points
 double distance (double x1, double y1, double x2, double y2){
 	double dx = x1-x2;
@@ -74,6 +80,7 @@ int main(int argc, char * argv[]){
 	
 	bool circle_detection = false;
 	bool contour_detection = false;
+	bool partial_trajectory = false;
 	// number of waypoints sent to the robot
 	int npt = 1;
 	int roi_l = 0;
@@ -82,6 +89,7 @@ int main(int argc, char * argv[]){
 	int roi_b = 0;
 	home.getParam("circle", circle_detection);
 	home.getParam("contour", contour_detection);	
+	home.getParam("partial_traj", partial_trajectory);
 	home.getParam("number_of_waypoints", npt);	
 	home.getParam("roi_l", roi_l);	
 	home.getParam("roi_r", roi_r);
@@ -94,7 +102,9 @@ int main(int argc, char * argv[]){
 
 	// subscribe to the rectified rgb input (needs the calibration file read in the launch file for the camera)
 	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color",10,get_img);
-
+	
+	// subscriber to the robot position
+	ros::Subscriber rob_sub = nh_.subscribe("/robot/worldpos", 10, get_pos);
 
 	//publisher for checking the images and debugging them
 	ros::Publisher dbg_pub = nh_.advertise<sensor_msgs::Image>("mydbg",1);
@@ -128,12 +138,13 @@ int main(int argc, char * argv[]){
 	
 
 	// the Homography transformation set to Identity matrix initially
-	Eigen::MatrixXd H(3,3);
+	/*Eigen::MatrixXd H(3,3);
 	Eigen::MatrixXd F(3,3);
 	Eigen::MatrixXd FH(3,3);
 	F << 1417.429951, 0.000000, 641.887498, 0.000000, 1416.676900, 456.966163, 0.000000, 0.000000, 1.000000;
 	H << 1,0,0,0,1,0,0,0,1;
 	FH <<1,0,0,0,1,0,0,0,1;
+	*/	
 	// two temp variables for transforming pixel coordinates to world frame coordinates
 	Eigen::MatrixXd X(3,1);
 	Eigen::MatrixXd Xp(3,1);
@@ -148,10 +159,33 @@ int main(int argc, char * argv[]){
 		pt_tmp.x = 0; pt_tmp.y=0;		
 		prev_way_points.push_back(pt_tmp);
 	}
+	cv::Rect roi;
+    roi.x = roi_l;
+    roi.y = roi_u;
+    roi.width = roi_r - roi_l;
+    roi.height = roi_b - roi_u;
+
+
+	Point ul;
+	Point br;
+	ul.x = roi.x;
+	ul.y = roi.y;
+	br.x = roi.x + roi.width;
+	br.y = roi.y + roi.height;
 
 	while(ros::ok()){
 		// if an image is received from the camera process it 
 		if(initialized){
+			image_corners[0].x = ul.x;
+			image_corners[0].y = br.y;
+			image_corners[1].x = br.x;
+			image_corners[1].y = br.y;
+			image_corners[2].x = ul.x;
+			image_corners[2].y = ul.y;
+			image_corners[3].x = br.x;
+			image_corners[3].y = ul.y;
+
+
 			// variable for grayscale format of the input image
 			Mat gimg;
 			// convert the input image to grayscale
@@ -159,6 +193,62 @@ int main(int argc, char * argv[]){
 			// apply gaussian smoothing of the image
 			GaussianBlur(gimg, gimg, Size(5,5),2,2);			
 			// the corners of the reference square on the ground (pixel coordinates)
+
+
+		//// beginning of the corner detection 			
+			vector<Point2f> corners;
+			// parameters of the corner detection algorithm
+			int maxCorners = 10;
+			double qualityLevel = 0.01;
+			double minDistance = 100;
+			int blockSize = 2;
+			bool useHarrisDetector = false;
+			double k = 0.04;
+			// detect the corners of the square using the smoothed grayscale image
+			goodFeaturesToTrack( gimg,
+               corners,
+               maxCorners,
+               qualityLevel,
+               minDistance,
+               Mat(),
+               blockSize,
+               useHarrisDetector,
+               k );
+
+			// sort the corners using the image corners to match order of the rect corners
+			vector<double> sort_tmp;
+			vector<Point2f> corners_sorted;			
+			// find the point closest to each corner of the image 
+			for (int i = 0 ; i < image_corners.size() ; i++){
+				double min_dist = 10000;
+				double min_ind = 0;
+				for (int j = 0; j < corners.size(); j++){
+					double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
+					if (dist < min_dist){
+						min_ind = j;
+						min_dist = dist;
+					}
+				}
+				corners_sorted.push_back(corners[min_ind]);
+			}
+			//filter the position of the corners to prevent suddent jumps
+			double tau = 0.8;
+			for (int i = 0; i < corners_sorted.size() ; i++){
+				corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
+				corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
+				prev_corners_sorted[i].x = corners_sorted[i].x;
+				prev_corners_sorted[i].y = corners_sorted[i].y;
+			}
+			// show the corners
+			for( int i = 0; i < corners_sorted.size(); i++ ){ 
+				circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
+			}
+
+			// find the homography transformation using the world frame coordinates for rect and their associate pixel frame coordinates
+			Mat Hh = findHomography( corners_sorted, rect, CV_RANSAC );
+
+
+
 
 			// for circle detection algorithm 
 			if (circle_detection){
@@ -204,9 +294,7 @@ int main(int argc, char * argv[]){
 						// only draw the first one for now		
 						if(masked_contours.size() == 1){
 							drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
-							// a variable for changing the color of waypoints from red (first waypoint) to the green (last waypoint)
-							int col_inc = 255/npt;
-							int color_ctr = 0;
+
 							// calculate the length of the contour in pixels (from the start pixel to the end pixel)
 							int cont_size = masked_contours[0].size();
 							// add the distance between the final and initial point as a starting value (when sweeping the points the all of the points except the last are considered)
@@ -221,34 +309,74 @@ int main(int argc, char * argv[]){
 							double seg_len = 0;
 							double seg_len_prev = 0;
 							way_points.clear();	
-							pt = masked_contours[0][0];
-							// put the first point of the contour in the waypoint list
-							way_points.push_back(pt);
-							// scan through the points and try to produce equally distanced waypoints using the total length of the contour 
-							for (int k = 0; k < cont_size-1; k++){
-								// calculate the length of a segment on the contour
-								seg_len += distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
-								// check if it is close to the average length (total_length/number_of_waypoints)
-								if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
-									// add this point to the waypoint list
-									pt = masked_contours[0][k];
-									way_points.push_back(pt);				
-									// reset the length			
-									seg_len = 0;
+							if(partial_trajectory){
+								double min_dist = 10000;
+								int min_ind = 0;
+								vector<Point2f> contour_world;
+								vector<Point2f> contour_inp;
+								for (int kk = 0; kk<masked_contours[0].size(); kk++)
+									contour_inp.push_back(masked_contours[0][kk]);
+								perspectiveTransform(contour_inp, contour_world, Hh);
+								
+								for (int k = 0; k < cont_size; k++){
+									double dist = distance(contour_world[k].x,contour_world[k].y, rob_pos.linear.x,rob_pos.linear.y); 
+									if(dist < min_dist){
+										min_dist = dist;
+										min_ind = k;		
+									}									
 								}
-								seg_len_prev = seg_len;
-							}	
-							// add the final point of the contour to the waypoint list
-							pt = masked_contours[0][masked_contours[0].size()-1];
-							way_points.push_back(pt);
-							// lowpass filter for the position of the way points, set tau = 0.0 to deactivate the filter
+								// pick the closest point as the first waypoint
+								pt = masked_contours[0][min_ind];
+								// put the first point of the contour in the waypoint list
+								way_points.push_back(pt);
+								
+								for (int k = 0; k < cont_size; k++){
+
+									// calculate the length of a segment on the contour
+									seg_len += distance(masked_contours[0][(min_ind+k)%cont_size].x,masked_contours[0][(min_ind+k)%cont_size].y, masked_contours[0][(min_ind+k+1)%cont_size].x,masked_contours[0][(min_ind+k+1)%cont_size].y); 
+									// check if it is close to the average length (total_length/number_of_waypoints)
+									if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
+										// add this point to the waypoint list
+										pt = masked_contours[0][(min_ind+k)%cont_size];
+										way_points.push_back(pt);				
+										// reset the length			
+										seg_len = 0;
+									}
+									seg_len_prev = seg_len;
+									if(way_points.size() == 3)
+										break;
+								}	
+
+
+							}else{
+								pt = masked_contours[0][0];
+								// put the first point of the contour in the waypoint list
+								way_points.push_back(pt);
+								// scan through the points and try to produce equally distanced waypoints using the total length of the contour 
+								for (int k = 0; k < cont_size-1; k++){
+									// calculate the length of a segment on the contour
+									seg_len += distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
+									// check if it is close to the average length (total_length/number_of_waypoints)
+									if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
+										// add this point to the waypoint list
+										pt = masked_contours[0][k];
+										way_points.push_back(pt);				
+										// reset the length			
+										seg_len = 0;
+									}
+									seg_len_prev = seg_len;
+								}	
+								// add the final point of the contour to the waypoint list
+								pt = masked_contours[0][masked_contours[0].size()-1];
+								way_points.push_back(pt);
+								// lowpass filter for the position of the way points, set tau = 0.0 to deactivate the filter
+								
+							}
 							double tau = 0.8;
 							// filter the noise in the waypoints (prevent suddent jumps)
 							for (int k = 0; k < way_points.size(); k++){
 								way_points[k].x = (1-tau)*way_points[k].x + tau*prev_way_points[k].x;
 								way_points[k].y = (1-tau)*way_points[k].y + tau*prev_way_points[k].y;
-								// show them on the image
-								circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0+k*col_inc), 3, LINE_AA);
 							}
 							// save the last value for the next filtering loop
 							prev_way_points = way_points;
@@ -257,84 +385,13 @@ int main(int argc, char * argv[]){
 				 }
 			// end of contour detection
 			 }
-			cv::Rect roi;
-		    roi.x = roi_l;
-		    roi.y = roi_u;
-		    roi.width = roi_r - roi_l;
-		    roi.height = roi_b - roi_u;
-
-
-			Point ul;
-			Point br;
-			ul.x = roi.x;
-			ul.y = roi.y;
-			br.x = roi.x + roi.width;
-			br.y = roi.y + roi.height;
-			image_corners[0].x = ul.x;
-			image_corners[0].y = br.y;
-			image_corners[1].x = br.x;
-			image_corners[1].y = br.y;
-			image_corners[2].x = ul.x;
-			image_corners[2].y = ul.y;
-			image_corners[3].x = br.x;
-			image_corners[3].y = ul.y;
+			
 /*
 			image_corners.push_back(Point2f(width, height));
 			image_corners.push_back(Point2f(0.0f,0.0f));
 			image_corners.push_back(Point2f(width, 0.0f));
 */
 			
-		//// beginning of the corner detection 			
-			vector<Point2f> corners;
-			// parameters of the corner detection algorithm
-			int maxCorners = 10;
-			double qualityLevel = 0.01;
-			double minDistance = 100;
-			int blockSize = 2;
-			bool useHarrisDetector = false;
-			double k = 0.04;
-			// detect the corners of the square using the smoothed grayscale image
-			goodFeaturesToTrack( gimg,
-               corners,
-               maxCorners,
-               qualityLevel,
-               minDistance,
-               Mat(),
-               blockSize,
-               useHarrisDetector,
-               k );
-
-			// sort the corners using the image corners to match order of the rect corners
-			vector<double> sort_tmp;
-			vector<Point2f> corners_sorted;			
-			// find the point closest to each corner of the image 
-			for (int i = 0 ; i < image_corners.size() ; i++){
-				double min_dist = 10000;
-				double min_ind = 0;
-				for (int j = 0; j < corners.size(); j++){
-					double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
-					if (dist < min_dist){
-						min_ind = j;
-						min_dist = dist;
-					}
-				}
-				corners_sorted.push_back(corners[min_ind]);
-			}
-			//filter the position of the corners to prevent suddent jumps
-			double tau = 0.95;
-			for (int i = 0; i < corners_sorted.size() ; i++){
-				corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
-				corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
-				prev_corners_sorted[i].x = corners_sorted[i].x;
-				prev_corners_sorted[i].y = corners_sorted[i].y;
-			}
-			// show the corners
-			for( int i = 0; i < corners_sorted.size(); i++ ){ 
-				circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
-			}
-
-			// find the homography transformation using the world frame coordinates for rect and their associate pixel frame coordinates
-			Mat Hh = findHomography( corners_sorted, rect, CV_RANSAC );
 
 			//for (int i = 0; i < 3; i++)
 			//	for (int j = 0; j < 3; j++)
@@ -353,6 +410,8 @@ int main(int argc, char * argv[]){
  			perspectiveTransform( corners_sorted, scene_corners, Hh);
  			perspectiveTransform( way_points, scene_wps, Hh);
 			trajectory_msgs::JointTrajectory plan;
+			// a variable for changing the color of waypoints from red (first waypoint) to the green (last waypoint)
+			int col_inc = 255/npt;
 
 			for (int k = 0; k <way_points.size(); k++){
 				trajectory_msgs::JointTrajectoryPoint plan_pt;
@@ -367,15 +426,18 @@ int main(int argc, char * argv[]){
 					plan_pt.accelerations.push_back(0);
 				}
 				plan.points.push_back(plan_pt);			
+				circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0+k*col_inc), 3, LINE_AA);
+
 			}
 	
 	
 
 			plan_pub.publish(plan);
 			// show the image with detected points
-			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
+//			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
+
 			Mat img_crop = img(roi);
-			cv_ptr->image = img;
+			cv_ptr->image = img_crop;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
 		}		

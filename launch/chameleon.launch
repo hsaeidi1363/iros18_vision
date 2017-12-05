@@ -12,6 +12,7 @@
 		<param name = "number_of_waypoints" value = "8"/>
 		<param name ="circle" value = "false"/>
 		<param name ="contour" value = "true"/>
+		<param name ="partial_traj" value = "false"/>
 		<param name = "roi_l" value = "450"/>
 		<param name = "roi_r" value = "950"/>
 		<param name = "roi_u" value = "300"/>
