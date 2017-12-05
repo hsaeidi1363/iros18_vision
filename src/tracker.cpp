@@ -76,10 +76,17 @@ int main(int argc, char * argv[]){
 	bool contour_detection = false;
 	// number of waypoints sent to the robot
 	int npt = 1;
-
+	int roi_l = 0;
+	int roi_r = 0;
+	int roi_u = 0;
+	int roi_b = 0;
 	home.getParam("circle", circle_detection);
 	home.getParam("contour", contour_detection);	
 	home.getParam("number_of_waypoints", npt);	
+	home.getParam("roi_l", roi_l);	
+	home.getParam("roi_r", roi_r);
+	home.getParam("roi_u", roi_u);
+	home.getParam("roi_b", roi_b);
 
 	// set the loop frequency equal to the camera input
 	int loop_freq = 7;
@@ -102,10 +109,15 @@ int main(int argc, char * argv[]){
 	geometry_msgs::Twist x;
 	// the world coordinates of the reference calibration square
 	vector<Point2f> rect;
-	rect.push_back(Point2f(0.1f, -0.5f));
-	rect.push_back(Point2f(0.1f, -0.4f));
-	rect.push_back(Point2f(0.0f, -0.5f));
-	rect.push_back(Point2f(0.0f, -0.4f));
+//	rect.push_back(Point2f(0.1f, -0.5f));
+//	rect.push_back(Point2f(0.1f, -0.4f));
+//	rect.push_back(Point2f(0.0f, -0.5f));
+//	rect.push_back(Point2f(0.0f, -0.4f));
+
+	rect.push_back(Point2f(0.0315f, -.59521f));
+	rect.push_back(Point2f(0.03102f, -0.49823f));
+	rect.push_back(Point2f(-0.0663f, -0.59548f));
+	rect.push_back(Point2f(-0.06665f, -0.49814f));
 
 	// variable for filtering the noise in the corner jumps
 	vector<Point2f> prev_corners_sorted;	
@@ -117,15 +129,19 @@ int main(int argc, char * argv[]){
 
 	// the Homography transformation set to Identity matrix initially
 	Eigen::MatrixXd H(3,3);
+	Eigen::MatrixXd F(3,3);
+	Eigen::MatrixXd FH(3,3);
+	F << 1417.429951, 0.000000, 641.887498, 0.000000, 1416.676900, 456.966163, 0.000000, 0.000000, 1.000000;
 	H << 1,0,0,0,1,0,0,0,1;
+	FH <<1,0,0,0,1,0,0,0,1;
 	// two temp variables for transforming pixel coordinates to world frame coordinates
-	Eigen::VectorXd X(3);
-	Eigen::VectorXd Xp(3);
+	Eigen::MatrixXd X(3,1);
+	Eigen::MatrixXd Xp(3,1);
 
 	// previous waypoints sent to the robot (used for filtering purposes)
-	vector<Point> prev_way_points;
+	vector<Point2f> prev_way_points;
 	// waypoints sent to the robot
-	vector<Point> way_points;
+	vector<Point2f> way_points;
 	// initialize the previous waypoints
 	for (int i = 0; i < npt; i++){
 		Point pt_tmp;
@@ -232,7 +248,7 @@ int main(int argc, char * argv[]){
 								way_points[k].x = (1-tau)*way_points[k].x + tau*prev_way_points[k].x;
 								way_points[k].y = (1-tau)*way_points[k].y + tau*prev_way_points[k].y;
 								// show them on the image
-								circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0), 3, LINE_AA);
+								circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0+k*col_inc), 3, LINE_AA);
 							}
 							// save the last value for the next filtering loop
 							prev_way_points = way_points;
@@ -241,11 +257,37 @@ int main(int argc, char * argv[]){
 				 }
 			// end of contour detection
 			 }
+			cv::Rect roi;
+		    roi.x = roi_l;
+		    roi.y = roi_u;
+		    roi.width = roi_r - roi_l;
+		    roi.height = roi_b - roi_u;
 
+
+			Point ul;
+			Point br;
+			ul.x = roi.x;
+			ul.y = roi.y;
+			br.x = roi.x + roi.width;
+			br.y = roi.y + roi.height;
+			image_corners[0].x = ul.x;
+			image_corners[0].y = br.y;
+			image_corners[1].x = br.x;
+			image_corners[1].y = br.y;
+			image_corners[2].x = ul.x;
+			image_corners[2].y = ul.y;
+			image_corners[3].x = br.x;
+			image_corners[3].y = ul.y;
+/*
+			image_corners.push_back(Point2f(width, height));
+			image_corners.push_back(Point2f(0.0f,0.0f));
+			image_corners.push_back(Point2f(width, 0.0f));
+*/
+			
 		//// beginning of the corner detection 			
 			vector<Point2f> corners;
 			// parameters of the corner detection algorithm
-			int maxCorners = 4;
+			int maxCorners = 10;
 			double qualityLevel = 0.01;
 			double minDistance = 100;
 			int blockSize = 2;
@@ -292,39 +334,30 @@ int main(int argc, char * argv[]){
 			}
 
 			// find the homography transformation using the world frame coordinates for rect and their associate pixel frame coordinates
-			Mat Hh = findHomography( rect, corners_sorted, CV_RANSAC );
+			Mat Hh = findHomography( corners_sorted, rect, CV_RANSAC );
 
-			for (int i = 0; i < 3; i++)
-				for (int j = 0; j < 3; j++)
-					H(i,j) = Hh.at<double>(i,j);
-			
+			//for (int i = 0; i < 3; i++)
+			//	for (int j = 0; j < 3; j++)
+					//H(i,j) = Hh.at<double>(i,j);
+		
+/*
+			Eigen::MatrixXd R(3,3);
+			Eigen::MatrixXd T(1,3);
+			R<< 0.999886810965460,    -0.0150454397517300,    0,0.0150454397517300,    0.999886810965460,    0, 0,    0,    1;			
+			T << -0.0169027700559601,    -0.580519109823255,    -0.290000000000000;
+*/
+        
+			std::vector<Point2f> scene_corners(4);
+			std::vector<Point2f> scene_wps(way_points.size());
 
-/////
-			//H(0,0) = 0.187539;
-			//H(0,1) = 0.982225;
-			//H(0,2) = 596.3800;
-			//H(1,0) = 0.9822533;
-			//H(1,1) = -0.1875547;
-			//H(1,2) = -53.55759;
-			//H(2,0) = 0.0026587;
-			//H(2,1) = 0.0074549;
-			//H(2,2) = -399.50405;
-			
-
-/////
-
-
+ 			perspectiveTransform( corners_sorted, scene_corners, Hh);
+ 			perspectiveTransform( way_points, scene_wps, Hh);
 			trajectory_msgs::JointTrajectory plan;
-			// debugging 
-			/*for (int k = 0; k <4; k++){
+
+			for (int k = 0; k <way_points.size(); k++){
 				trajectory_msgs::JointTrajectoryPoint plan_pt;
-				Xp(0) = corners_sorted[k].x;
-				Xp(1) = corners_sorted[k].y;
-				Xp(2) = 1;
-				X = H.inverse()*Xp;
-				plan_pt.positions.push_back(X(0));
-				plan_pt.positions.push_back(X(1));
-				
+				plan_pt.positions.push_back(scene_wps[k].x);
+				plan_pt.positions.push_back(scene_wps[k].y);
 				plan_pt.positions.push_back(0.6143);
 				plan_pt.positions.push_back(3.1);
 				plan_pt.positions.push_back(0.002);
@@ -333,30 +366,15 @@ int main(int argc, char * argv[]){
 					plan_pt.velocities.push_back(0);
 					plan_pt.accelerations.push_back(0);
 				}
-				plan.points.push_back(plan_pt);
-			
-			}*/
-	
-			// xyzrpy waypoints		
-			for (int k = 0; k < way_points.size(); k++){
-				Xp(0) = way_points[k].x; Xp(1) = way_points[k].y; Xp(2) = 1;
-				X = H.inverse()*Xp;
-				trajectory_msgs::JointTrajectoryPoint plan_pt;
-				plan_pt.positions.push_back(X(0));
-				plan_pt.positions.push_back(X(1));
-				plan_pt.positions.push_back(0.6143);
-				plan_pt.positions.push_back(3.1);
-				plan_pt.positions.push_back(0.002);
-				plan_pt.positions.push_back(1.8415);
-				for (int ind= 0; ind < 6; ind++){
-					plan_pt.velocities.push_back(0);
-					plan_pt.accelerations.push_back(0);
-				}
-				plan.points.push_back(plan_pt);
+				plan.points.push_back(plan_pt);			
 			}
+	
+	
 
 			plan_pub.publish(plan);
 			// show the image with detected points
+			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
+			Mat img_crop = img(roi);
 			cv_ptr->image = img;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
