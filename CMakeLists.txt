@@ -206,3 +206,6 @@ include_directories(
 
 add_executable(iros18_vision_tracker src/tracker.cpp src/planner.cpp)
 target_link_libraries(iros18_vision_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(iros18_vision_homography_est src/homography_est.cpp)
+target_link_libraries(iros18_vision_homography_est ${catkin_LIBRARIES} ${OpenCV_LIBS})

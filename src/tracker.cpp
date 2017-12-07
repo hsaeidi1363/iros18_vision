@@ -1,7 +1,8 @@
 #include<ros/ros.h>
+#include<ros/package.h>
 #include<opencv2/imgproc/imgproc.hpp>
 #include<opencv2/highgui/highgui.hpp>
-#include "opencv2/calib3d/calib3d.hpp"
+#include <opencv2/calib3d/calib3d.hpp>
 #include<sensor_msgs/Image.h>
 #include<cv_bridge/cv_bridge.h>
 #include<geometry_msgs/Twist.h>
@@ -77,10 +78,19 @@ int main(int argc, char * argv[]){
 	ros::init(argc,argv,"tracker");
 	ros::NodeHandle nh_;
 	ros::NodeHandle home("~");
-	
+
+	string H_file = "/homography/H.yml";
+	H_file = ros::package::getPath("iros18_vision")+H_file;
+    FileStorage fs(H_file.c_str(), FileStorage::READ);
+
+	Mat offline_H;
+	fs["Homography"] >> offline_H;
+
+
 	bool circle_detection = false;
 	bool contour_detection = false;
 	bool partial_trajectory = false;
+	bool offline_homography = false;	
 	// number of waypoints sent to the robot
 	int npt = 1;
 	int roi_l = 0;
@@ -90,6 +100,7 @@ int main(int argc, char * argv[]){
 	home.getParam("circle", circle_detection);
 	home.getParam("contour", contour_detection);	
 	home.getParam("partial_traj", partial_trajectory);
+	home.getParam("offline_homography", offline_homography);
 	home.getParam("number_of_waypoints", npt);	
 	home.getParam("roi_l", roi_l);	
 	home.getParam("roi_r", roi_r);
@@ -194,61 +205,63 @@ int main(int argc, char * argv[]){
 			GaussianBlur(gimg, gimg, Size(5,5),2,2);			
 			// the corners of the reference square on the ground (pixel coordinates)
 
-
-		//// beginning of the corner detection 			
-			vector<Point2f> corners;
-			// parameters of the corner detection algorithm
-			int maxCorners = 10;
-			double qualityLevel = 0.01;
-			double minDistance = 100;
-			int blockSize = 2;
-			bool useHarrisDetector = false;
-			double k = 0.04;
-			// detect the corners of the square using the smoothed grayscale image
-			goodFeaturesToTrack( gimg,
-               corners,
-               maxCorners,
-               qualityLevel,
-               minDistance,
-               Mat(),
-               blockSize,
-               useHarrisDetector,
-               k );
-
-			// sort the corners using the image corners to match order of the rect corners
-			vector<double> sort_tmp;
-			vector<Point2f> corners_sorted;			
-			// find the point closest to each corner of the image 
-			for (int i = 0 ; i < image_corners.size() ; i++){
-				double min_dist = 10000;
-				double min_ind = 0;
-				for (int j = 0; j < corners.size(); j++){
-					double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
-					if (dist < min_dist){
-						min_ind = j;
-						min_dist = dist;
-					}
-				}
-				corners_sorted.push_back(corners[min_ind]);
-			}
-			//filter the position of the corners to prevent suddent jumps
-			double tau = 0.8;
-			for (int i = 0; i < corners_sorted.size() ; i++){
-				corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
-				corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
-				prev_corners_sorted[i].x = corners_sorted[i].x;
-				prev_corners_sorted[i].y = corners_sorted[i].y;
-			}
-			// show the corners
-			for( int i = 0; i < corners_sorted.size(); i++ ){ 
-				circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
-			}
-
+			
+			Mat Hh;
 			// find the homography transformation using the world frame coordinates for rect and their associate pixel frame coordinates
-			Mat Hh = findHomography( corners_sorted, rect, CV_RANSAC );
+			if(!offline_homography){
+			//// beginning of the corner detection 			
+				vector<Point2f> corners;
+				// parameters of the corner detection algorithm
+				int maxCorners = 10;
+				double qualityLevel = 0.01;
+				double minDistance = 100;
+				int blockSize = 2;
+				bool useHarrisDetector = false;
+				double k = 0.04;
+				// detect the corners of the square using the smoothed grayscale image
+				goodFeaturesToTrack( gimg,
+		           corners,
+		           maxCorners,
+		           qualityLevel,
+		           minDistance,
+		           Mat(),
+		           blockSize,
+		           useHarrisDetector,
+		           k );
 
+				// sort the corners using the image corners to match order of the rect corners
+				vector<double> sort_tmp;
+				vector<Point2f> corners_sorted;			
+				// find the point closest to each corner of the image 
+				for (int i = 0 ; i < image_corners.size() ; i++){
+					double min_dist = 10000;
+					double min_ind = 0;
+					for (int j = 0; j < corners.size(); j++){
+						double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
+						if (dist < min_dist){
+							min_ind = j;
+							min_dist = dist;
+						}
+					}
+					corners_sorted.push_back(corners[min_ind]);
+				}
+				//filter the position of the corners to prevent suddent jumps
+				double tau = 0.8;
+				for (int i = 0; i < corners_sorted.size() ; i++){
+					corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
+					corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
+					prev_corners_sorted[i].x = corners_sorted[i].x;
+					prev_corners_sorted[i].y = corners_sorted[i].y;
+				}
+				// show the corners
+				for( int i = 0; i < corners_sorted.size(); i++ ){ 
+					circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
+				}
 
-
+				Hh = findHomography( corners_sorted, rect, CV_RANSAC );
+			}else{
+				Hh = offline_H;
+			}
 
 			// for circle detection algorithm 
 			if (circle_detection){
@@ -367,8 +380,8 @@ int main(int argc, char * argv[]){
 									seg_len_prev = seg_len;
 								}	
 								// add the final point of the contour to the waypoint list
-								pt = masked_contours[0][masked_contours[0].size()-1];
-								way_points.push_back(pt);
+								//pt = masked_contours[0][masked_contours[0].size()-1];
+								//way_points.push_back(pt);
 								// lowpass filter for the position of the way points, set tau = 0.0 to deactivate the filter
 								
 							}
@@ -407,7 +420,7 @@ int main(int argc, char * argv[]){
 			std::vector<Point2f> scene_corners(4);
 			std::vector<Point2f> scene_wps(way_points.size());
 
- 			perspectiveTransform( corners_sorted, scene_corners, Hh);
+ 			//perspectiveTransform( corners_sorted, scene_corners, Hh);
  			perspectiveTransform( way_points, scene_wps, Hh);
 			trajectory_msgs::JointTrajectory plan;
 			// a variable for changing the color of waypoints from red (first waypoint) to the green (last waypoint)

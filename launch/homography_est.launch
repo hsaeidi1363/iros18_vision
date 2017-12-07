@@ -8,12 +8,7 @@
 		</node>
 	</group>	
 	<node name="camgui" pkg="rqt_gui" type="rqt_gui"/>
-	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker">
-		<param name = "number_of_waypoints" value = "20"/>
-		<param name ="circle" value = "false"/>
-		<param name ="contour" value = "true"/>
-		<param name ="partial_traj" value = "false"/>
-		<param name ="offline_homography" value = "true"/>
+	<node name ="H_Est" pkg="iros18_vision" type="iros18_vision_homography_est">
 		<param name = "roi_l" value = "450"/>
 		<param name = "roi_r" value = "950"/>
 		<param name = "roi_u" value = "300"/>
