@@ -12,10 +12,10 @@
 		<param name = "number_of_waypoints" value = "20"/>
 		<param name ="circle" value = "false"/>
 		<param name ="contour" value = "true"/>
-		<param name ="partial_traj" value = "false"/>
+		<param name ="partial_traj" value = "true"/>
 		<param name ="offline_homography" value = "true"/>
 		<param name = "roi_l" value = "350"/>
-		<param name = "roi_r" value = "900"/>
+		<param name = "roi_r" value = "850"/>
 		<param name = "roi_u" value = "200"/>
 		<param name = "roi_b" value = "630"/>
 	</node>

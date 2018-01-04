@@ -112,7 +112,7 @@ int main(int argc, char * argv[]){
 	ros::Rate loop_rate(loop_freq);
 
 	// subscribe to the rectified rgb input (needs the calibration file read in the launch file for the camera)
-	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color",10,get_img);
+	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color",2,get_img);
 	
 	// subscriber to the robot position
 	ros::Subscriber rob_sub = nh_.subscribe("/robot/worldpos", 10, get_pos);

@@ -67,10 +67,10 @@ int main(int argc, char * argv[]){
 	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color", 10,get_img);
 	
 	vector<Point2f> rect;
-	rect.push_back(Point2f(0.06808f, -0.559281f));
-	rect.push_back(Point2f(0.06710f, -0.46203f));
-	rect.push_back(Point2f(-0.02997f, -0.55984f));
-	rect.push_back(Point2f(-0.0306f, -0.46304f));
+	rect.push_back(Point2f(0.044f, -0.566f));
+	rect.push_back(Point2f(0.0436f, -0.469f));
+	rect.push_back(Point2f(-0.05345f, -0.5674f));
+	rect.push_back(Point2f(-0.05393f, -0.470f));
 	
 	vector<Point2f> prev_corners_sorted;
 	for (int i = 0; i < 4; i++)
