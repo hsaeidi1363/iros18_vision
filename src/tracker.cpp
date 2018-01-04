@@ -4,6 +4,7 @@
 #include<opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include<sensor_msgs/Image.h>
+#include<std_msgs/UInt8.h>
 #include<cv_bridge/cv_bridge.h>
 #include<geometry_msgs/Twist.h>
 #include "planner.h"
@@ -67,6 +68,12 @@ void get_pos (const geometry_msgs::Twist & _data){
 	rob_pos = _data;
 }
 
+
+std_msgs::UInt8 control_mode;
+void get_mode(const std_msgs::UInt8 & _data){
+	control_mode = _data;
+}
+
 // find the distance between to XY points
 double distance (double x1, double y1, double x2, double y2){
 	double dx = x1-x2;
@@ -116,6 +123,9 @@ int main(int argc, char * argv[]){
 	
 	// subscriber to the robot position
 	ros::Subscriber rob_sub = nh_.subscribe("/robot/worldpos", 10, get_pos);
+
+	// subscriber to the robot control mode
+	ros::Subscriber control_mode_sub = nh_.subscribe("/iiwa/control_mode" , 10, get_mode);
 
 	//publisher for checking the images and debugging them
 	ros::Publisher dbg_pub = nh_.advertise<sensor_msgs::Image>("mydbg",1);
@@ -450,6 +460,12 @@ int main(int argc, char * argv[]){
 //			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
 
 			Mat img_crop = img(roi);
+			std::string control_text;
+			if(control_mode.data == 1)
+				control_text ="Manual Control";
+			if(control_mode.data == 0)
+				control_text ="Autonomous Control";
+			putText(img_crop , control_text, Point(50,50), FONT_HERSHEY_PLAIN, 2, Scalar (0,0,255,255)); 
 			cv_ptr->image = img_crop;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
