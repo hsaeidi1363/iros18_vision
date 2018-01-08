@@ -59,6 +59,11 @@ int main(int argc, char * argv[]){
 
 	FileStorage fs(file_name.c_str(), FileStorage::WRITE);
 
+	file_name = "/homography/H_inv.yml";
+	file_name = ros::package::getPath("iros18_vision")+file_name; 
+
+	FileStorage fs_inv(file_name.c_str(), FileStorage::WRITE);
+
 	int loop_freq = 7;
 	ros::Rate loop_rate(loop_freq);
 	
@@ -67,10 +72,10 @@ int main(int argc, char * argv[]){
 	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color", 10,get_img);
 	
 	vector<Point2f> rect;
-	rect.push_back(Point2f(0.044f, -0.566f));
-	rect.push_back(Point2f(0.0436f, -0.469f));
-	rect.push_back(Point2f(-0.05345f, -0.5674f));
-	rect.push_back(Point2f(-0.05393f, -0.470f));
+	rect.push_back(Point2f(0.0043f, -0.591f));
+	rect.push_back(Point2f(0.00197f, -0.49455f));
+	rect.push_back(Point2f(-0.09317f, -0.59386f));
+	rect.push_back(Point2f(-0.09558f, -0.4971f));
 	
 	vector<Point2f> prev_corners_sorted;
 	for (int i = 0; i < 4; i++)
@@ -95,7 +100,8 @@ int main(int argc, char * argv[]){
 	image_corners.push_back(Point2f(br.x,br.y));		
 	image_corners.push_back(Point2f(ul.x,ul.y));		
 	image_corners.push_back(Point2f(br.x,ul.y));	
-	Mat Hh;// = (Mat_<double>(2,2) <<2.0,1.0,3.0,1.0);
+	Mat Hh;
+	Mat Hh_inv;
 	while(ros::ok()){
 		if(initialized){
 			Mat gimg;
@@ -142,6 +148,7 @@ int main(int argc, char * argv[]){
 				circle(img, corners_sorted[i],6,  Scalar(255,0,0), -1, 8,0);
 			}
 			Hh = findHomography(corners_sorted, rect, CV_RANSAC);
+			Hh_inv = findHomography(rect, corners_sorted, CV_RANSAC);
 
 			Mat img_crop = img(roi);
 			cv_ptr->image = img_crop;
@@ -152,7 +159,9 @@ int main(int argc, char * argv[]){
 		loop_rate.sleep();
 	}
 	fs << "Homography"<<Hh;
-//	fs << Hh;
 	fs.release();
+
+	fs_inv << "Homography"<<Hh_inv;
+	fs_inv.release();
 	return 0;
 }

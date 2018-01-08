@@ -88,10 +88,16 @@ int main(int argc, char * argv[]){
 
 	string H_file = "/homography/H.yml";
 	H_file = ros::package::getPath("iros18_vision")+H_file;
-    FileStorage fs(H_file.c_str(), FileStorage::READ);
+        FileStorage fs(H_file.c_str(), FileStorage::READ);
 
+	H_file = "/homography/H_inv.yml";
+	H_file = ros::package::getPath("iros18_vision")+H_file;
+        FileStorage fs_inv(H_file.c_str(), FileStorage::READ);
+	
 	Mat offline_H;
+	Mat offline_H_inv;
 	fs["Homography"] >> offline_H;
+	fs_inv["Homography"] >> offline_H_inv;
 
 
 	bool circle_detection = false;
@@ -459,6 +465,13 @@ int main(int argc, char * argv[]){
 			// show the image with detected points
 //			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
 
+			if(offline_homography){
+				std::vector<Point2f> robot_tool;
+				robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));
+				std::vector<Point2f> robot_tool_projection;
+	 			perspectiveTransform( robot_tool,robot_tool_projection, offline_H_inv);
+				circle(img, Point(robot_tool_projection[0].x,robot_tool_projection[0].y), 2, Scalar(0,255,0), 3, LINE_AA);
+			}
 			Mat img_crop = img(roi);
 			std::string control_text;
 			if(control_mode.data == 1)
