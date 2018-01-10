@@ -6,7 +6,7 @@
 #include<opencv2/opencv.hpp>
 #include<cv_bridge/cv_bridge.h>
 #include<sensor_msgs/Image.h>
-
+#include<fstream>
 
 
 using namespace cv;
@@ -53,6 +53,7 @@ int main(int argc, char * argv[]){
 	home.getParam("roi_r", roi_r);	
 	home.getParam("roi_u", roi_u);	
 	home.getParam("roi_b", roi_b);	
+	std::ofstream corners_file;
 
 	string file_name = "/homography/H.yml";
 	file_name = ros::package::getPath("iros18_vision")+file_name; 
@@ -77,7 +78,15 @@ int main(int argc, char * argv[]){
 	rect.push_back(Point2f(-0.09317f, -0.59386f));
 	rect.push_back(Point2f(-0.09558f, -0.4971f));
 	
-	vector<Point2f> prev_corners_sorted;
+        corners_file.open((ros::package::getPath("iros18_vision")+"homography/corners.csv").c_str());
+        corners_file << rect[0].x<<"," << rect[0].y<< endl;
+        corners_file << rect[1].x<<"," << rect[1].y<< endl;
+        corners_file << rect[2].x<<"," << rect[2].y<< endl;
+        corners_file << rect[3].x<<"," << rect[3].y<< endl;
+
+        corners_file.close();
+	
+        vector<Point2f> prev_corners_sorted;
 	for (int i = 0; i < 4; i++)
 		prev_corners_sorted.push_back(Point2f(0.0f,0.0f));
 	
