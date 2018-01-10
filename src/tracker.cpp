@@ -4,6 +4,7 @@
 #include<opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include<sensor_msgs/Image.h>
+#include<std_msgs/UInt8.h>
 #include<cv_bridge/cv_bridge.h>
 #include<geometry_msgs/Twist.h>
 #include "planner.h"
@@ -67,6 +68,12 @@ void get_pos (const geometry_msgs::Twist & _data){
 	rob_pos = _data;
 }
 
+
+std_msgs::UInt8 control_mode;
+void get_mode(const std_msgs::UInt8 & _data){
+	control_mode = _data;
+}
+
 // find the distance between to XY points
 double distance (double x1, double y1, double x2, double y2){
 	double dx = x1-x2;
@@ -81,10 +88,16 @@ int main(int argc, char * argv[]){
 
 	string H_file = "/homography/H.yml";
 	H_file = ros::package::getPath("iros18_vision")+H_file;
-    FileStorage fs(H_file.c_str(), FileStorage::READ);
+        FileStorage fs(H_file.c_str(), FileStorage::READ);
 
+	H_file = "/homography/H_inv.yml";
+	H_file = ros::package::getPath("iros18_vision")+H_file;
+        FileStorage fs_inv(H_file.c_str(), FileStorage::READ);
+	
 	Mat offline_H;
+	Mat offline_H_inv;
 	fs["Homography"] >> offline_H;
+	fs_inv["Homography"] >> offline_H_inv;
 
 
 	bool circle_detection = false;
@@ -112,10 +125,13 @@ int main(int argc, char * argv[]){
 	ros::Rate loop_rate(loop_freq);
 
 	// subscribe to the rectified rgb input (needs the calibration file read in the launch file for the camera)
-	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color",10,get_img);
+	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color",2,get_img);
 	
 	// subscriber to the robot position
 	ros::Subscriber rob_sub = nh_.subscribe("/robot/worldpos", 10, get_pos);
+
+	// subscriber to the robot control mode
+	ros::Subscriber control_mode_sub = nh_.subscribe("/iiwa/control_mode" , 10, get_mode);
 
 	//publisher for checking the images and debugging them
 	ros::Publisher dbg_pub = nh_.advertise<sensor_msgs::Image>("mydbg",1);
@@ -449,7 +465,20 @@ int main(int argc, char * argv[]){
 			// show the image with detected points
 //			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
 
+			if(offline_homography){
+				std::vector<Point2f> robot_tool;
+				robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));
+				std::vector<Point2f> robot_tool_projection;
+	 			perspectiveTransform( robot_tool,robot_tool_projection, offline_H_inv);
+				circle(img, Point(robot_tool_projection[0].x,robot_tool_projection[0].y), 2, Scalar(0,255,0), 3, LINE_AA);
+			}
 			Mat img_crop = img(roi);
+			std::string control_text;
+			if(control_mode.data == 1)
+				control_text ="Manual Control";
+			if(control_mode.data == 0)
+				control_text ="Autonomous Control";
+			putText(img_crop , control_text, Point(50,50), FONT_HERSHEY_PLAIN, 2, Scalar (0,0,255,255)); 
 			cv_ptr->image = img_crop;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
