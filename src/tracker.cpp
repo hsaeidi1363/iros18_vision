@@ -322,7 +322,7 @@ int main(int argc, char * argv[]){
 						masked_contours.push_back(contours[i]);			
 						// only draw the first one for now		
 						if(masked_contours.size() == 1){
-							drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
+							//drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 
 							// calculate the length of the contour in pixels (from the start pixel to the end pixel)
 							int cont_size = masked_contours[0].size();
@@ -470,7 +470,10 @@ int main(int argc, char * argv[]){
 				robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));
 				std::vector<Point2f> robot_tool_projection;
 	 			perspectiveTransform( robot_tool,robot_tool_projection, offline_H_inv);
-				circle(img, Point(robot_tool_projection[0].x,robot_tool_projection[0].y), 2, Scalar(0,255,0), 3, LINE_AA);
+				//circle(img, Point(robot_tool_projection[0].x,robot_tool_projection[0].y), 2, Scalar(0,255,0), 3, LINE_AA);
+				
+                                line(img,Point(robot_tool_projection[0].x ,robot_tool_projection[0].y + 5),Point(robot_tool_projection[0].x ,robot_tool_projection[0].y - 5), Scalar(0,255,0), 0.5, LINE_AA);
+                                line(img,Point(robot_tool_projection[0].x + 5,robot_tool_projection[0].y ),Point(robot_tool_projection[0].x - 5,robot_tool_projection[0].y ), Scalar(0,255,0), 0.5, LINE_AA);
 			}
 			Mat img_crop = img(roi);
 			std::string control_text;

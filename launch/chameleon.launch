@@ -9,7 +9,7 @@
 	</group>	
 	<node name="camgui" pkg="rqt_gui" type="rqt_gui"/>
 	<node name ="circletracker" pkg="iros18_vision" type="iros18_vision_tracker">
-		<param name = "number_of_waypoints" value = "4"/>
+		<param name = "number_of_waypoints" value = "20"/>
 		<param name ="circle" value = "false"/>
 		<param name ="contour" value = "true"/>
 		<param name ="partial_traj" value = "true"/>
