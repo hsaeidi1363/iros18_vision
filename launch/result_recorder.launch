@@ -1,0 +1,7 @@
+<launch>
+	<node name ="my_recorder" pkg="image_view" type="video_recorder">
+		<param name = "fps" value = "7"/>
+		<param name = "image" value = "/camera/image_rect_color"/>
+		<param name = "filename" value = "test_out"/>
+	</node>
+</launch>

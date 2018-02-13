@@ -1,0 +1,1 @@
+ rosrun image_view video_recorder image:=/camera/image_rect_color fps=7 

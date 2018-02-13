@@ -28,7 +28,7 @@ CvImagePtr cv_ptr;
 
 
 // canny edge detection threshold
-int thresh = 100;
+int thresh = 110;
 
 
 // for producing random colors in the detected features
@@ -187,10 +187,10 @@ int main(int argc, char * argv[]){
 		prev_way_points.push_back(pt_tmp);
 	}
 	cv::Rect roi;
-    roi.x = roi_l;
-    roi.y = roi_u;
-    roi.width = roi_r - roi_l;
-    roi.height = roi_b - roi_u;
+        roi.x = roi_l;
+        roi.y = roi_u;
+        roi.width = roi_r - roi_l;
+        roi.height = roi_b - roi_u;
 
 
 	Point ul;
@@ -306,23 +306,24 @@ int main(int argc, char * argv[]){
 				/// Detect edges using canny
 				Canny( gimg, canny_output, thresh, thresh*2, 3 );
 				/// Find contours
-				findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+				findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
 
 				/// detect the contours that are close to the center of image
 				for( int i = 0; i< contours.size(); i++ ){
 					bool in_region =true;
 					for (int k = 0; k < contours[i].size(); k++){
 						Point pt = contours[i][k];
-						if (distance(pt.x, pt.y, width/2,height/2) > 200){
+						if (distance(pt.x, pt.y, width/2,height/2) > 300){
 							in_region = false;
 						}
 					}
 					if(in_region){	
 						// collect the contours in the region of interest
 						masked_contours.push_back(contours[i]);			
+                                                //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 						// only draw the first one for now		
 						if(masked_contours.size() == 1){
-							//drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
+							drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 
 							// calculate the length of the contour in pixels (from the start pixel to the end pixel)
 							int cont_size = masked_contours[0].size();

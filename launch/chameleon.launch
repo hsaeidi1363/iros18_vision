@@ -1,7 +1,7 @@
 <launch>
 	<include file = "$(find pointgrey_camera_driver)/launch/camera.launch">
 		<arg name="calibrated" value ="1"/>
-		<arg name="camera_serial" value= "rrl2"/>
+		<arg name="camera_serial" value= "rrl3"/>
 	</include>
 	<group ns="camera">
 		<node name ="rectifier" pkg = "image_proc" type ="image_proc">
@@ -14,10 +14,10 @@
 		<param name ="contour" value = "true"/>
 		<param name ="partial_traj" value = "true"/>
 		<param name ="offline_homography" value = "true"/>
-		<param name = "roi_l" value = "350"/>
-		<param name = "roi_r" value = "850"/>
-		<param name = "roi_u" value = "200"/>
-		<param name = "roi_b" value = "630"/>
+		<param name = "roi_l" value = "1"/>
+		<param name = "roi_r" value = "1295"/>
+		<param name = "roi_u" value = "1"/>
+		<param name = "roi_b" value = "963"/>
 	</node>
 </launch>
 
