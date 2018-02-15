@@ -73,10 +73,10 @@ int main(int argc, char * argv[]){
 	ros::Subscriber cam_sub = nh_.subscribe("camera/image_rect_color", 10,get_img);
 	
 	vector<Point2f> rect;
-	rect.push_back(Point2f(0.033f, -0.524f));
-	rect.push_back(Point2f(0.033f, -0.425f));
-	rect.push_back(Point2f(-0.066f, -0.526f));
-	rect.push_back(Point2f(-0.067f, -0.426f));
+	rect.push_back(Point2f(0.034f, -0.525f));
+	rect.push_back(Point2f(0.0319f, -0.425f));
+	rect.push_back(Point2f(-0.065f, -0.528f));
+	rect.push_back(Point2f(-0.0685f, -0.4276f));
 	
         corners_file.open((ros::package::getPath("iros18_vision")+"/homography/corners.csv").c_str());
         corners_file << rect[0].x<<"," << rect[0].y<< endl;

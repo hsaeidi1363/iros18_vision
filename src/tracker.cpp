@@ -28,7 +28,8 @@ CvImagePtr cv_ptr;
 
 
 // canny edge detection threshold
-int thresh = 110;
+int thresh_low = 100;
+int thresh_high = 220;
 
 
 // for producing random colors in the detected features
@@ -95,15 +96,25 @@ int main(int argc, char * argv[]){
         FileStorage fs_inv(H_file.c_str(), FileStorage::READ);
 	
 	Mat offline_H;
-	Mat offline_H_inv;
+	Mat offline_H_inv;    
 	fs["Homography"] >> offline_H;
 	fs_inv["Homography"] >> offline_H_inv;
 
+        vector<vector<Point> > contours;
+	// contours inside the region of interest
+	vector<vector<Point> > masked_contours;
+	// variable used for contour detection
+	vector<Vec4i> hierarchy;
+        
+        
 
 	bool circle_detection = false;
 	bool contour_detection = false;
 	bool partial_trajectory = false;
-	bool offline_homography = false;	
+	bool offline_homography = false;
+        bool track_detected = false;
+        
+        int track_ctr = 0;
 	// number of waypoints sent to the robot
 	int npt = 1;
 	int roi_l = 0;
@@ -297,122 +308,125 @@ int main(int argc, char * argv[]){
 			
 			if (contour_detection){
 				Mat canny_output;
-				vector<vector<Point> > contours;
-				// contours inside the region of interest
-				vector<vector<Point> > masked_contours;
-				// variable used for contour detection
-				vector<Vec4i> hierarchy;
-
-				/// Detect edges using canny
-				Canny( gimg, canny_output, thresh, thresh*2, 3 );
-				/// Find contours
-				findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
-
-				/// detect the contours that are close to the center of image
-				for( int i = 0; i< contours.size(); i++ ){
-					bool in_region =true;
-					for (int k = 0; k < contours[i].size(); k++){
-						Point pt = contours[i][k];
-						if (distance(pt.x, pt.y, width/2,height/2) > 300){
-							in_region = false;
-						}
-					}
-					if(in_region){	
-						// collect the contours in the region of interest
-						masked_contours.push_back(contours[i]);			
+			
+                                if (!track_detected || track_ctr <20){
+                                    track_ctr++;
+                                    track_detected = true;
+                                    contours.clear();
+                                    hierarchy.clear();
+                                  
+                                    /// Detect edges using canny
+                                    Canny( gimg, canny_output, thresh_low, thresh_high, 3 );
+                                    /// Find contours
+                                    findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
+                                }
+                                masked_contours.clear();
+                                /// detect the contours that are close to the center of image
+                                for( int i = 0; i< contours.size(); i++ ){
+                                        bool in_region =true;
+                                        for (int k = 0; k < contours[i].size(); k++){
+                                                Point pt = contours[i][k];
+                                                if (distance(pt.x, pt.y, width/2,height/2) > 300){
+                                                        in_region = false;
+                                                }
+                                        }
+                                        if(in_region){	
+                                                // collect the contours in the region of interest
+                                                masked_contours.push_back(contours[i]);			
                                                 //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
-						// only draw the first one for now		
-						if(masked_contours.size() == 1){
-							drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
+                                                // only draw the first one for now		
+                                                if(masked_contours.size() == 1){
+                                                        drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 
-							// calculate the length of the contour in pixels (from the start pixel to the end pixel)
-							int cont_size = masked_contours[0].size();
-							// add the distance between the final and initial point as a starting value (when sweeping the points the all of the points except the last are considered)
-							double cont_len = distance(masked_contours[0][0].x,masked_contours[0][0].y, masked_contours[0][cont_size-1].x,masked_contours[0][cont_size-1].y);
-							// calculate the length of the contour in pixels
-							for (int k = 0; k < cont_size-1; k++){
-								double ds = distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
-								cont_len += ds;
-							}
-						
-							Point pt;
-							double seg_len = 0;
-							double seg_len_prev = 0;
-							way_points.clear();	
-							if(partial_trajectory){
-								double min_dist = 10000;
-								int min_ind = 0;
-								vector<Point2f> contour_world;
-								vector<Point2f> contour_inp;
-								for (int kk = 0; kk<masked_contours[0].size(); kk++)
-									contour_inp.push_back(masked_contours[0][kk]);
-								perspectiveTransform(contour_inp, contour_world, Hh);
-								
-								for (int k = 0; k < cont_size; k++){
-									double dist = distance(contour_world[k].x,contour_world[k].y, rob_pos.linear.x,rob_pos.linear.y); 
-									if(dist < min_dist){
-										min_dist = dist;
-										min_ind = k;		
-									}									
-								}
-								// pick the closest point as the first waypoint
-								pt = masked_contours[0][min_ind];
-								// put the first point of the contour in the waypoint list
-								way_points.push_back(pt);
-								
-								for (int k = 0; k < cont_size; k++){
+                                                        // calculate the length of the contour in pixels (from the start pixel to the end pixel)
+                                                        int cont_size = masked_contours[0].size();
+                                                        // add the distance between the final and initial point as a starting value (when sweeping the points the all of the points except the last are considered)
+                                                        double cont_len = distance(masked_contours[0][0].x,masked_contours[0][0].y, masked_contours[0][cont_size-1].x,masked_contours[0][cont_size-1].y);
+                                                        // calculate the length of the contour in pixels
+                                                        for (int k = 0; k < cont_size-1; k++){
+                                                                double ds = distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
+                                                                cont_len += ds;
+                                                        }
+                                                
+                                                        Point pt;
+                                                        double seg_len = 0;
+                                                        double seg_len_prev = 0;
+                                                        way_points.clear();	
+                                                        if(partial_trajectory){
+                                                                double min_dist = 10000;
+                                                                int min_ind = 0;
+                                                                vector<Point2f> contour_world;
+                                                                vector<Point2f> contour_inp;
+                                                                for (int kk = 0; kk<masked_contours[0].size(); kk++)
+                                                                        contour_inp.push_back(masked_contours[0][kk]);
+                                                                perspectiveTransform(contour_inp, contour_world, Hh);
+                                                                
+                                                                for (int k = 0; k < cont_size; k++){
+                                                                        double dist = distance(contour_world[k].x,contour_world[k].y, rob_pos.linear.x,rob_pos.linear.y); 
+                                                                        if(dist < min_dist){
+                                                                                min_dist = dist;
+                                                                                min_ind = k;		
+                                                                        }									
+                                                                }
+                                                                // pick the closest point as the first waypoint
+                                                                pt = masked_contours[0][min_ind];
+                                                                // put the first point of the contour in the waypoint list
+                                                                way_points.push_back(pt);
+                                                                
+                                                                for (int k = 0; k < cont_size; k++){
 
-									// calculate the length of a segment on the contour
-									seg_len += distance(masked_contours[0][(min_ind+k)%cont_size].x,masked_contours[0][(min_ind+k)%cont_size].y, masked_contours[0][(min_ind+k+1)%cont_size].x,masked_contours[0][(min_ind+k+1)%cont_size].y); 
-									// check if it is close to the average length (total_length/number_of_waypoints)
-									if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
-										// add this point to the waypoint list
-										pt = masked_contours[0][(min_ind+k)%cont_size];
-										way_points.push_back(pt);				
-										// reset the length			
-										seg_len = 0;
-									}
-									seg_len_prev = seg_len;
-									if(way_points.size() == 3)
-										break;
-								}	
+                                                                        // calculate the length of a segment on the contour
+                                                                        seg_len += distance(masked_contours[0][(min_ind+k)%cont_size].x,masked_contours[0][(min_ind+k)%cont_size].y, masked_contours[0][(min_ind+k+1)%cont_size].x,masked_contours[0][(min_ind+k+1)%cont_size].y); 
+                                                                        // check if it is close to the average length (total_length/number_of_waypoints)
+                                                                        if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
+                                                                                // add this point to the waypoint list
+                                                                                pt = masked_contours[0][(min_ind+k)%cont_size];
+                                                                                way_points.push_back(pt);				
+                                                                                // reset the length			
+                                                                                seg_len = 0;
+                                                                        }
+                                                                        seg_len_prev = seg_len;
+                                                                        if(way_points.size() == 3)
+                                                                                break;
+                                                                }	
 
 
-							}else{
-								pt = masked_contours[0][0];
-								// put the first point of the contour in the waypoint list
-								way_points.push_back(pt);
-								// scan through the points and try to produce equally distanced waypoints using the total length of the contour 
-								for (int k = 0; k < cont_size-1; k++){
-									// calculate the length of a segment on the contour
-									seg_len += distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
-									// check if it is close to the average length (total_length/number_of_waypoints)
-									if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
-										// add this point to the waypoint list
-										pt = masked_contours[0][k];
-										way_points.push_back(pt);				
-										// reset the length			
-										seg_len = 0;
-									}
-									seg_len_prev = seg_len;
-								}	
-								// add the final point of the contour to the waypoint list
-								//pt = masked_contours[0][masked_contours[0].size()-1];
-								//way_points.push_back(pt);
-								// lowpass filter for the position of the way points, set tau = 0.0 to deactivate the filter
-								
-							}
-							double tau = 0.8;
-							// filter the noise in the waypoints (prevent suddent jumps)
-							for (int k = 0; k < way_points.size(); k++){
-								way_points[k].x = (1-tau)*way_points[k].x + tau*prev_way_points[k].x;
-								way_points[k].y = (1-tau)*way_points[k].y + tau*prev_way_points[k].y;
-							}
-							// save the last value for the next filtering loop
-							prev_way_points = way_points;
-						}
-					}
-				 }
+                                                        }else{
+                                                                pt = masked_contours[0][0];
+                                                                // put the first point of the contour in the waypoint list
+                                                                way_points.push_back(pt);
+                                                                // scan through the points and try to produce equally distanced waypoints using the total length of the contour 
+                                                                for (int k = 0; k < cont_size-1; k++){
+                                                                        // calculate the length of a segment on the contour
+                                                                        seg_len += distance(masked_contours[0][k].x,masked_contours[0][k].y, masked_contours[0][k+1].x,masked_contours[0][k+1].y); 
+                                                                        // check if it is close to the average length (total_length/number_of_waypoints)
+                                                                        if( (seg_len_prev < cont_len/npt) && (seg_len > cont_len/npt) ){
+                                                                                // add this point to the waypoint list
+                                                                                pt = masked_contours[0][k];
+                                                                                way_points.push_back(pt);				
+                                                                                // reset the length			
+                                                                                seg_len = 0;
+                                                                        }
+                                                                        seg_len_prev = seg_len;
+                                                                }	
+                                                                // add the final point of the contour to the waypoint list
+                                                                //pt = masked_contours[0][masked_contours[0].size()-1];
+                                                                //way_points.push_back(pt);
+                                                                // lowpass filter for the position of the way points, set tau = 0.0 to deactivate the filter
+                                                                
+                                                        }
+                                                        double tau = 0.8;
+                                                        // filter the noise in the waypoints (prevent suddent jumps)
+                                                        for (int k = 0; k < way_points.size(); k++){
+                                                                way_points[k].x = (1-tau)*way_points[k].x + tau*prev_way_points[k].x;
+                                                                way_points[k].y = (1-tau)*way_points[k].y + tau*prev_way_points[k].y;
+                                                        }
+                                                        // save the last value for the next filtering loop
+                                                        prev_way_points = way_points;
+                                                }
+                                        }
+                                   
+                            }//end of if
 			// end of contour detection
 			 }
 			
