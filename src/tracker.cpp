@@ -12,7 +12,7 @@
 #include<trajectory_msgs/JointTrajectory.h> 
 #include<trajectory_msgs/JointTrajectoryPoint.h> 
 
-
+#define PI 3.14159 
 
 using namespace cv;
 using namespace std;
@@ -235,60 +235,178 @@ int main(int argc, char * argv[]){
 			
 			Mat Hh;
 			// find the homography transformation using the world frame coordinates for rect and their associate pixel frame coordinates
-			if(!offline_homography){
+			
 			//// beginning of the corner detection 			
-				vector<Point2f> corners;
-				// parameters of the corner detection algorithm
-				int maxCorners = 10;
-				double qualityLevel = 0.01;
-				double minDistance = 100;
-				int blockSize = 2;
-				bool useHarrisDetector = false;
-				double k = 0.04;
-				// detect the corners of the square using the smoothed grayscale image
-				goodFeaturesToTrack( gimg,
-		           corners,
-		           maxCorners,
-		           qualityLevel,
-		           minDistance,
-		           Mat(),
-		           blockSize,
-		           useHarrisDetector,
-		           k );
+                            vector<Point2f> corners;
+                            // parameters of the corner detection algorithm
+                            int maxCorners = 10;
+                            double qualityLevel = 0.01;
+                            double minDistance = 100;
+                            int blockSize = 2;
+                            bool useHarrisDetector = false;
+                            double k = 0.04;
+                            // detect the corners of the square using the smoothed grayscale image
+                            goodFeaturesToTrack( gimg,
+                                                corners,
+                                                maxCorners,
+                                                qualityLevel,
+                                                minDistance,
+                                                Mat(),
+                                                blockSize,
+                                                useHarrisDetector,
+                                                k );
 
-				// sort the corners using the image corners to match order of the rect corners
-				vector<double> sort_tmp;
-				vector<Point2f> corners_sorted;			
-				// find the point closest to each corner of the image 
-				for (int i = 0 ; i < image_corners.size() ; i++){
-					double min_dist = 10000;
-					double min_ind = 0;
-					for (int j = 0; j < corners.size(); j++){
-						double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
-						if (dist < min_dist){
-							min_ind = j;
-							min_dist = dist;
-						}
-					}
-					corners_sorted.push_back(corners[min_ind]);
-				}
-				//filter the position of the corners to prevent suddent jumps
-				double tau = 0.8;
-				for (int i = 0; i < corners_sorted.size() ; i++){
-					corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
-					corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
-					prev_corners_sorted[i].x = corners_sorted[i].x;
-					prev_corners_sorted[i].y = corners_sorted[i].y;
-				}
-				// show the corners
-				for( int i = 0; i < corners_sorted.size(); i++ ){ 
-					circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
-				}
+                            // sort the corners using the image corners to match order of the rect corners
+                            vector<double> sort_tmp;
+                            vector<Point2f> corners_sorted;			
+                            // find the point closest to each corner of the image 
+                            for (int i = 0 ; i < image_corners.size() ; i++){
+                                    double min_dist = 10000;
+                                    double min_ind = 0;
+                                    for (int j = 0; j < corners.size(); j++){
+                                            double dist = distance(image_corners[i].x,image_corners[i].y,corners[j].x,corners[j].y);
+                                            if (dist < min_dist){
+                                                    min_ind = j;
+                                                    min_dist = dist;
+                                            }
+                                    }
+                                    corners_sorted.push_back(corners[min_ind]);
+                            }
+                            //filter the position of the corners to prevent suddent jumps
+                            double tau = 0.8;
+                            for (int i = 0; i < corners_sorted.size() ; i++){
+                                    corners_sorted[i].x = (1-tau)*corners_sorted[i].x + tau*prev_corners_sorted[i].x;
+                                    corners_sorted[i].y = (1-tau)*corners_sorted[i].y + tau*prev_corners_sorted[i].y;
+                                    prev_corners_sorted[i].x = corners_sorted[i].x;
+                                    prev_corners_sorted[i].y = corners_sorted[i].y;
+                            }
+                            // show the corners
+                            for( int i = 0; i < corners_sorted.size(); i++ ){ 
+                                    circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
+                            }
 
+                        if(!offline_homography){
 				Hh = findHomography( corners_sorted, rect, CV_RANSAC );
 			}else{
 				Hh = offline_H;
 			}
+			
+			vector<Point2f> dst;
+                        // define the dimensions of the new view of the square (10x10 cm which is transformed to dim x dim pixels here
+                        float dim = 500;
+                        float pix2mm = 100/dim;
+                       
+                        dst.push_back(Point2f(1.0f, dim));
+                        dst.push_back(Point2f(dim, dim));
+                        dst.push_back(Point2f(1.0f, 1.0f));
+                        dst.push_back(Point2f(dim, 1.0f));
+                        Mat square_img = Mat::zeros( dim, dim, img.type() );
+                        Mat square_overlay_img = Mat::zeros( dim, dim, img.type() );
+                        Mat overlay_img = Mat::zeros(  height, width, img.type() );
+                        //find the perspective transformation and extract the new frame
+                        Mat scene2square, square2scene;
+                        scene2square = getPerspectiveTransform(corners_sorted,dst);
+                        square2scene = getPerspectiveTransform(dst, corners_sorted);
+                        
+                        warpPerspective(img,square_img,scene2square,square_img.size() );
+                        
+                        Mat blood;
+                        Mat hsv;
+                        cvtColor(square_img, hsv, COLOR_BGR2HSV);
+                        
+                        inRange(hsv,  Scalar(0, 100, 0), Scalar(160, 255, 100), blood);
+                        GaussianBlur(blood, blood, Size(5,5),2,2);
+                        blood = 255 - blood;
+                        
+                        SimpleBlobDetector::Params params_blood;
+                        // Change thresholds
+                        params_blood.minThreshold = 0;
+                        params_blood.maxThreshold = 255;
+                        
+                        // Filter by Area.
+                        params_blood.filterByArea = true;
+                        params_blood.minArea = 500;
+
+                      
+                        
+                        // Filter by Convexity
+                        params_blood.filterByConvexity = true;
+                        params_blood.minConvexity = 0.2;
+
+                        // Filter by Inertia
+                        params_blood.filterByInertia = true;
+                        params_blood.minInertiaRatio = 0.1;
+
+
+                        Ptr<SimpleBlobDetector> detector_blood = SimpleBlobDetector::create(params_blood);
+                        
+                        // Detect blobs.
+                        vector<KeyPoint> keypoints_blood;
+                        detector_blood->detect(blood, keypoints_blood);
+
+                        
+                        // Draw detected blobs as red circles.
+                        // DrawMatchesFlags::DRAW_RICH_KEYPOINTS flag ensures the size of the circle corresponds to the size of blob
+                        Mat im_with_blood;
+                        drawKeypoints( blood, keypoints_blood, im_with_blood, Scalar(0,0,255), DrawMatchesFlags::DRAW_RICH_KEYPOINTS );
+
+                        Point traj_center = Point(dim/2, dim/2); 
+                        int traj_diag = (int)(dim*24.5/100);
+                        Scalar traj_color = Scalar(0,0,255);
+                        circle(im_with_blood, traj_center, traj_diag, traj_color, 1, LINE_AA);
+                        
+                        vector<vector<Point> > blood_overlaps;
+                        for (int blood_no =0; blood_no < keypoints_blood.size(); blood_no++){
+                            vector<Point> single_overlap;
+                            float x_blood = keypoints_blood[blood_no].pt.x;
+			    float y_blood = keypoints_blood[blood_no].pt.y;
+			    float r_blood = keypoints_blood[blood_no].size/2;
+                            int angles_no = 720;
+                            double start_angle = 0;
+                            double end_angle = 0;
+                            for (int angles = 0; angles < angles_no ; angles ++){
+                                float current_angle = (float) -angles/angles_no*PI*2;
+                                float ptx = traj_center.x + traj_diag * cos(current_angle);
+                                float pty = traj_center.y + traj_diag * sin(current_angle);
+                                
+                                float dist_to_blood = (ptx - x_blood)*(ptx - x_blood) + (pty - y_blood)*(pty - y_blood); 
+                                // if this point of trajectory is inside the blood circle
+                                if (dist_to_blood <= r_blood*r_blood){                                
+                                    single_overlap.push_back(Point(ptx,pty));
+                                    if(single_overlap.size() ==1){
+                                        start_angle = current_angle;
+                                    }
+                                    circle( im_with_blood, Point(ptx,pty), 1, Scalar(255,0,0), -1, 8, 0 );
+                                    end_angle = current_angle;
+                                }
+                                
+                            }
+                            int overllap_len = single_overlap.size();
+                            if (overllap_len >2){
+                                int mid_point_ind = (int) overllap_len / 2;
+                                float mid_point_angle = (start_angle + end_angle)/2;
+                                float start2end_angle = (start_angle - end_angle)/2; // be wary of the sign!
+                                float go_back_angle = mid_point_angle + 1.61 * start2end_angle;
+                                float go_forward_angle = mid_point_angle - 1.61 * start2end_angle;
+                                double switch_start_x = traj_center.x + traj_diag * cos(go_back_angle);
+                                double switch_start_y = traj_center.y + traj_diag * sin(go_back_angle);
+                                double switch_end_x = traj_center.x + traj_diag * cos(go_forward_angle);
+                                double switch_end_y = traj_center.y + traj_diag * sin(go_forward_angle);
+                                Point rook_points[1][3];
+                                rook_points[0][0] = Point( traj_center.x, traj_center.x );
+                                //rook_points[0][1] = Point( single_overlap[overllap_len-1].x, single_overlap[overllap_len-1].y );
+                                //rook_points[0][2] = Point( single_overlap[0].x, single_overlap[0].y );
+                                rook_points[0][1] = Point( switch_start_x, switch_start_y );
+                                rook_points[0][2] = Point( switch_end_x,switch_end_y);
+                                const Point* ppt[1] = { rook_points[0] };
+                                int npt[] = { 3 };
+                                fillPoly(  square_overlay_img, ppt, npt,1, Scalar( 0, 255, 0 ), 8 );
+                            }
+                            blood_overlaps.push_back(single_overlap);
+                            
+                        }
+                        
+
 
 			// for circle detection algorithm 
 			if (circle_detection){
@@ -305,11 +423,18 @@ int main(int argc, char * argv[]){
 					} 
 				}
 			}
+			///
+
+		
+	
 			
+			
+			
+			///
 			if (contour_detection){
 				Mat canny_output;
 			
-                                if (!track_detected || track_ctr <20){
+                                if (!track_detected || track_ctr <2000){
                                     track_ctr++;
                                     track_detected = true;
                                     contours.clear();
@@ -470,7 +595,7 @@ int main(int argc, char * argv[]){
 					plan_pt.accelerations.push_back(0);
 				}
 				plan.points.push_back(plan_pt);			
-				circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0+k*col_inc), 3, LINE_AA);
+				//circle(img, Point(way_points[k].x, way_points[k].y), 5, Scalar(255-k*col_inc,0+k*col_inc,0+k*col_inc), 3, LINE_AA);
 
 			}
 	
@@ -480,7 +605,7 @@ int main(int argc, char * argv[]){
 			// show the image with detected points
 //			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
 
-			if(offline_homography){
+			/*if(offline_homography){
 				std::vector<Point2f> robot_tool;
 				robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));
 				std::vector<Point2f> robot_tool_projection;
@@ -489,7 +614,9 @@ int main(int argc, char * argv[]){
 				
                                 line(img,Point(robot_tool_projection[0].x ,robot_tool_projection[0].y + 5),Point(robot_tool_projection[0].x ,robot_tool_projection[0].y - 5), Scalar(0,255,0), 0.5, LINE_AA);
                                 line(img,Point(robot_tool_projection[0].x + 5,robot_tool_projection[0].y ),Point(robot_tool_projection[0].x - 5,robot_tool_projection[0].y ), Scalar(0,255,0), 0.5, LINE_AA);
-			}
+			}*/
+                        warpPerspective(square_overlay_img,overlay_img,square2scene,overlay_img.size() );
+                        addWeighted( img, 1.0, overlay_img, 0.5, 0.0, img);
 			Mat img_crop = img(roi);
 			std::string control_text;
 			if(control_mode.data == 1)
@@ -497,7 +624,9 @@ int main(int argc, char * argv[]){
 			if(control_mode.data == 0)
 				control_text ="Autonomous Control";
 			putText(img_crop , control_text, Point(50,50), FONT_HERSHEY_PLAIN, 2, Scalar (0,0,255,255)); 
-			cv_ptr->image = img_crop;
+			
+                        cv_ptr->image = img_crop;
+                        //cv_ptr->image = square_overlay_img;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
 		}		
