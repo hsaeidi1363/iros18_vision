@@ -63,6 +63,15 @@ void get_img(const sensor_msgs::Image &  _data){
 	initialized = true;
 }
 
+
+geometry_msgs::Twist haptic_pos;
+
+void get_haptic (const geometry_msgs::Twist & _data){
+	haptic_pos = _data;
+}
+
+
+
 geometry_msgs::Twist rob_pos;
 
 void get_pos (const geometry_msgs::Twist & _data){
@@ -140,6 +149,10 @@ int main(int argc, char * argv[]){
 	
 	// subscriber to the robot position
 	ros::Subscriber rob_sub = nh_.subscribe("/robot/worldpos", 10, get_pos);
+        
+        // subscriber to the haptic stylus position
+	ros::Subscriber haptic_sub = nh_.subscribe("/manual_commands", 10, get_haptic);
+        
 
 	// subscriber to the robot control mode
 	ros::Subscriber control_mode_sub = nh_.subscribe("/iiwa/control_mode" , 10, get_mode);
@@ -401,6 +414,8 @@ int main(int argc, char * argv[]){
                                 const Point* ppt[1] = { rook_points[0] };
                                 int npt[] = { 3 };
                                 fillPoly(  square_overlay_img, ppt, npt,1, Scalar( 0, 255, 0 ), 8 );
+                                //circle( square_overlay_img, single_overlap[mid_point_ind], 10, Scalar(255,0,0), -1, 8, 0 );
+                                
                             }
                             blood_overlaps.push_back(single_overlap);
                             
@@ -434,7 +449,7 @@ int main(int argc, char * argv[]){
 			if (contour_detection){
 				Mat canny_output;
 			
-                                if (!track_detected || track_ctr <2000){
+                                if (!track_detected || track_ctr <20){
                                     track_ctr++;
                                     track_detected = true;
                                     contours.clear();
@@ -461,7 +476,7 @@ int main(int argc, char * argv[]){
                                                 //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
                                                 // only draw the first one for now		
                                                 if(masked_contours.size() == 1){
-                                                        drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
+                                                        //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 
                                                         // calculate the length of the contour in pixels (from the start pixel to the end pixel)
                                                         int cont_size = masked_contours[0].size();
@@ -605,28 +620,34 @@ int main(int argc, char * argv[]){
 			// show the image with detected points
 //			rectangle(img, ul, br,Scalar(255,0,0), 3, LINE_AA);
 
-			/*if(offline_homography){
-				std::vector<Point2f> robot_tool;
-				robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));
-				std::vector<Point2f> robot_tool_projection;
-	 			perspectiveTransform( robot_tool,robot_tool_projection, offline_H_inv);
-				//circle(img, Point(robot_tool_projection[0].x,robot_tool_projection[0].y), 2, Scalar(0,255,0), 3, LINE_AA);
-				
-                                line(img,Point(robot_tool_projection[0].x ,robot_tool_projection[0].y + 5),Point(robot_tool_projection[0].x ,robot_tool_projection[0].y - 5), Scalar(0,255,0), 0.5, LINE_AA);
-                                line(img,Point(robot_tool_projection[0].x + 5,robot_tool_projection[0].y ),Point(robot_tool_projection[0].x - 5,robot_tool_projection[0].y ), Scalar(0,255,0), 0.5, LINE_AA);
-			}*/
+			if(offline_homography){
+				//std::vector<Point2f> robot_tool;
+                                //robot_tool.push_back(Point2f(rob_pos.linear.x,rob_pos.linear.y));    
+                                //std::vector<Point2f> robot_tool_projection;
+	 			//perspectiveTransform( robot_tool,robot_tool_projection, offline_H_inv);
+				//line(img,Point(robot_tool_projection[0].x ,robot_tool_projection[0].y + 5),Point(robot_tool_projection[0].x ,robot_tool_projection[0].y - 5), Scalar(0,255,0), 0.5, LINE_AA);
+                                //line(img,Point(robot_tool_projection[0].x + 5,robot_tool_projection[0].y ),Point(robot_tool_projection[0].x - 5,robot_tool_projection[0].y ), Scalar(0,255,0), 0.5, LINE_AA);
+                                if (control_mode.data == 0){
+                                    std::vector<Point2f> haptic_point;
+                                    haptic_point.push_back(Point2f(haptic_pos.linear.x,haptic_pos.linear.y));
+                                    std::vector<Point2f> haptic_point_projection;
+                                    perspectiveTransform( haptic_point,haptic_point_projection, offline_H_inv);                          
+                                    line(img,Point(haptic_point_projection[0].x ,haptic_point_projection[0].y + 5),Point(haptic_point_projection[0].x ,haptic_point_projection[0].y - 5), Scalar(0,255,0), 0.5, LINE_AA);
+                                    line(img,Point(haptic_point_projection[0].x + 5,haptic_point_projection[0].y ),Point(haptic_point_projection[0].x - 5,haptic_point_projection[0].y ), Scalar(0,255,0), 0.5, LINE_AA);
+                                }
+			}
                         warpPerspective(square_overlay_img,overlay_img,square2scene,overlay_img.size() );
                         addWeighted( img, 1.0, overlay_img, 0.5, 0.0, img);
 			Mat img_crop = img(roi);
 			std::string control_text;
 			if(control_mode.data == 1)
-				control_text ="Manual Control";
+				control_text ="Current Mode: Manual";
 			if(control_mode.data == 0)
-				control_text ="Autonomous Control";
-			putText(img_crop , control_text, Point(50,50), FONT_HERSHEY_PLAIN, 2, Scalar (0,0,255,255)); 
+				control_text ="Current Mode: Autonomous";
+			putText(img_crop , control_text, Point(200,200), CV_FONT_HERSHEY_DUPLEX, 2, Scalar (0,0,255,255)); 
 			
                         cv_ptr->image = img_crop;
-                        //cv_ptr->image = square_overlay_img;
+                        //cv_ptr->image = im_with_blood;
 			dbg_pub.publish(cv_ptr->toImageMsg());
 			
 		}		
