@@ -5,6 +5,7 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include<sensor_msgs/Image.h>
 #include<std_msgs/UInt8.h>
+#include<std_msgs/Bool.h>
 #include<cv_bridge/cv_bridge.h>
 #include<geometry_msgs/Twist.h>
 #include "planner.h"
@@ -70,6 +71,11 @@ void get_haptic (const geometry_msgs::Twist & _data){
 	haptic_pos = _data;
 }
 
+bool test_start;
+
+void get_test_start(const std_msgs::Bool & _data){
+	test_start = _data.data;
+}
 
 
 geometry_msgs::Twist rob_pos;
@@ -152,6 +158,9 @@ int main(int argc, char * argv[]){
         
         // subscriber to the haptic stylus position
 	ros::Subscriber haptic_sub = nh_.subscribe("/manual_commands", 10, get_haptic);
+        
+        //subscriber to the test start trigger
+        ros::Subscriber test_start_sub = nh_.subscribe("/test_start", 10, get_test_start);
         
 
 	// subscriber to the robot control mode
@@ -295,7 +304,7 @@ int main(int argc, char * argv[]){
                             }
                             // show the corners
                             for( int i = 0; i < corners_sorted.size(); i++ ){ 
-                                    circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
+                                    //circle( img, corners_sorted[i], 6, Scalar(255,0,0), -1, 8, 0 );
                             }
 
                         if(!offline_homography){
@@ -413,7 +422,7 @@ int main(int argc, char * argv[]){
                                 rook_points[0][2] = Point( switch_end_x,switch_end_y);
                                 const Point* ppt[1] = { rook_points[0] };
                                 int npt[] = { 3 };
-                                fillPoly(  square_overlay_img, ppt, npt,1, Scalar( 0, 255, 0 ), 8 );
+                                //fillPoly(  square_overlay_img, ppt, npt,1, Scalar( 0, 255, 0 ), 8 );
                                 //circle( square_overlay_img, single_overlap[mid_point_ind], 10, Scalar(255,0,0), -1, 8, 0 );
                                 
                             }
@@ -476,7 +485,7 @@ int main(int argc, char * argv[]){
                                                 //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
                                                 // only draw the first one for now		
                                                 if(masked_contours.size() == 1){
-                                                        //drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
+                                                        drawContours( img, contours, i, Scalar(255,255,0), 2, 8, hierarchy, 0, Point() );
 
                                                         // calculate the length of the contour in pixels (from the start pixel to the end pixel)
                                                         int cont_size = masked_contours[0].size();
@@ -601,7 +610,12 @@ int main(int argc, char * argv[]){
 				trajectory_msgs::JointTrajectoryPoint plan_pt;
 				plan_pt.positions.push_back(scene_wps[k].x);
 				plan_pt.positions.push_back(scene_wps[k].y);
-				plan_pt.positions.push_back(0.6143);
+				double z_start = 0.73;
+                                double z_cut = 0.687;
+                                if(test_start)
+                                    plan_pt.positions.push_back(z_cut);
+                                else
+                                    plan_pt.positions.push_back(z_start);
 				plan_pt.positions.push_back(3.1);
 				plan_pt.positions.push_back(0.002);
 				plan_pt.positions.push_back(1.8415);
@@ -644,7 +658,7 @@ int main(int argc, char * argv[]){
 				control_text ="Current Mode: Manual";
 			if(control_mode.data == 0)
 				control_text ="Current Mode: Autonomous";
-			putText(img_crop , control_text, Point(200,200), CV_FONT_HERSHEY_DUPLEX, 2, Scalar (0,0,255,255)); 
+			putText(img_crop , control_text, Point(200,150), CV_FONT_HERSHEY_DUPLEX, 2, Scalar (255,255,255,255)); 
 			
                         cv_ptr->image = img_crop;
                         //cv_ptr->image = im_with_blood;
