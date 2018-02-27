@@ -29,7 +29,7 @@ CvImagePtr cv_ptr;
 
 
 // canny edge detection threshold
-int thresh_low = 100;
+int thresh_low = 30;
 int thresh_high = 220;
 
 
@@ -247,11 +247,15 @@ int main(int argc, char * argv[]){
 
 
 			// variable for grayscale format of the input image
-			Mat gimg;
+			Mat gimg, hsv1, g0, g1;
 			// convert the input image to grayscale
 			cvtColor(img,gimg, CV_RGB2GRAY);
+                        inRange(gimg,  Scalar(0), Scalar(40), g0);
+                        cvtColor(img,hsv1, CV_RGB2HSV);
+                        inRange(hsv1,  Scalar(0, 0, 0), Scalar(180, 255, 85), g1);
+                        gimg = g0 | g1;
 			// apply gaussian smoothing of the image
-			GaussianBlur(gimg, gimg, Size(5,5),2,2);			
+			GaussianBlur(gimg, gimg, Size(25,25),2,2);			
 			// the corners of the reference square on the ground (pixel coordinates)
 
 			
@@ -466,6 +470,7 @@ int main(int argc, char * argv[]){
                                   
                                     /// Detect edges using canny
                                     Canny( gimg, canny_output, thresh_low, thresh_high, 3 );
+                                    gimg = canny_output;
                                     /// Find contours
                                     findContours( canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE, Point(0, 0) );
                                 }
@@ -611,7 +616,7 @@ int main(int argc, char * argv[]){
 				plan_pt.positions.push_back(scene_wps[k].x);
 				plan_pt.positions.push_back(scene_wps[k].y);
 				double z_start = 0.73;
-                                double z_cut = 0.687;
+                                double z_cut = 0.672;
                                 if(test_start)
                                     plan_pt.positions.push_back(z_cut);
                                 else
@@ -660,6 +665,8 @@ int main(int argc, char * argv[]){
 				control_text ="Current Mode: Autonomous";
 			putText(img_crop , control_text, Point(200,150), CV_FONT_HERSHEY_DUPLEX, 2, Scalar (255,255,255,255)); 
 			
+                       // cvtColor(gimg, img_crop, CV_GRAY2RGB);
+
                         cv_ptr->image = img_crop;
                         //cv_ptr->image = im_with_blood;
 			dbg_pub.publish(cv_ptr->toImageMsg());
